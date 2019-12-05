@@ -1,6 +1,6 @@
 # Kubernetes Monitoring
 
-> A simple Kubernetes monitoring stack without Helm or Jsonnet.
+> :computer: A simple Kubernetes monitoring stack without Helm or Jsonnet.
 
 I wanted an easy-to-deploy monitoring solution for Kubernetes with a simple Grafana dashboard, a few
 Alertmanager alerts, and built-in logging.
