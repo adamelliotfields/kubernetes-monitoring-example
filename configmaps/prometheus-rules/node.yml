@@ -1,0 +1,37 @@
+# https://awesome-prometheus-alerts.grep.to/rules#host
+groups:
+- name: Node
+  rules:
+  - alert: NodeHighCpuLoad
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: "High CPU load (instance {{ $labels.instance }})"
+      description: |-
+        Node CPU load is > 80%
+          VALUE = {{ $value }}
+          LABELS: {{ $labels }}
+  - alert: NodeOutOfMemory
+    expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes * 100 < 10
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: "Out of memory (instance {{ $labels.instance }})"
+      description: |-
+        Node memory is filling up (< 10% left)
+          VALUE = {{ $value }}
+          LABELS: {{ $labels }}
+  - alert: NodeOutOfDiskSpace
+    expr: node_filesystem_free_bytes{mountpoint ="/"} / node_filesystem_size_bytes{mountpoint ="/"} * 100 < 10
+    for: 1m
+    labels:
+      severity: page
+    annotations:
+      summary: "Out of disk space (instance {{ $labels.instance }})"
+      description: |-
+        Node disk is almost full (< 10% left)
+          VALUE = {{ $value }}
+          LABELS: {{ $labels }}

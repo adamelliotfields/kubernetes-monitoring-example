@@ -1,0 +1,11 @@
+global:
+  # https://api.slack.com/messaging/webhooks
+  slack_api_url: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX
+route:
+  group_by: ["alertname"]
+  receiver: default
+receivers:
+- name: default
+  slack_configs:
+  - channel: '#alertmanager'
+    send_resolved: true
