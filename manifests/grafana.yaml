@@ -1,0 +1,120 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/probe: 'true'
+    # Explicitly declare the port to scrape so Prometheus doesn't scrape the image renderer.
+    prometheus.io/port: '3000'
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  labels:
+    app: grafana
+spec:
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      initContainers:
+      - name: busybox
+        image: busybox:1.31.1
+        imagePullPolicy: IfNotPresent
+        # Prometheus and Loki both need to be up when Grafana is provisioning datasources.
+        command: ["sh", "-c"]
+        args:
+        - |-
+          set -e
+          while true; do
+            if nc -z prometheus 9090 > /dev/null 2>&1 && nc -z loki 3100 > /dev/null 2>&1; then
+              exit 0
+            else
+              sleep 1
+            fi
+          done
+      containers:
+      - image: grafana/grafana:6.5.1
+        name: grafana
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests: {}
+          limits: {}
+        ports:
+        - name: http
+          containerPort: 3000
+        env:
+          - name: GF_AUTH_DISABLE_LOGIN_FORM
+            value: 'true'
+          - name: GF_AUTH_DISABLE_SIGNOUT_MENU
+            value: 'true'
+          - name: GF_AUTH_ANONYMOUS_ENABLED
+            value: 'true'
+          - name: GF_AUTH_ANONYMOUS_ORG_ROLE
+            value: Admin
+          - name: GF_SECURITY_DISABLE_GRAVATAR
+            value: 'true'
+          - name: GF_ALERTING_ENABLED
+            value: 'false'
+          - name: GF_SERVER_ENABLE_GZIP
+            value: 'true'
+          - name: GF_RENDERING_SERVER_URL
+            value: http://localhost:8081/render
+          - name: GF_RENDERING_CALLBACK_URL
+            value: http://localhost:3000
+          - name: GF_LOG_MODE
+            value: console
+          - name: GF_LOG_FILTERS
+            value: rendering:debug
+        volumeMounts:
+        - name: grafana
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        - name: grafana-provisioning-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: grafana-provisioning-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+      # https://github.com/grafana/grafana-image-renderer/blob/v1.0.6/docs/remote_rendering_using_docker.md
+      - name: grafana-image-renderer
+        image: grafana/grafana-image-renderer:1.0.6
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests: {}
+          limits: {}
+        ports:
+        - name: renderer
+          containerPort: 8081
+      volumes:
+      - name: grafana
+        emptyDir: {}
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: grafana-provisioning-dashboards
+        configMap:
+          name: grafana-provisioning
+          items:
+          - key: dashboards.yaml
+            path: dashboards.yaml
+      - name: grafana-provisioning-datasources
+        configMap:
+          name: grafana-provisioning
+          items:
+          - key: datasources.yaml
+            path: datasources.yaml

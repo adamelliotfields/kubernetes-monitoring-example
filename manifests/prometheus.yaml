@@ -1,0 +1,118 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring-system
+---
+# https://github.com/prometheus/prometheus/blob/v2.14.0/documentation/examples/rbac-setup.yml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+- apiGroups: [""]
+  verbs: ["get", "list", "watch"]
+  resources:
+  - nodes
+  - nodes/metrics
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+- apiGroups: ["networking.k8s.io"]
+  verbs: ["get", "list", "watch"]
+  resources:
+  - ingresses
+  - ingresses/status
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitoring-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+  annotations:
+    prometheus.io/scrape: 'true'
+    prometheus.io/probe: 'true'
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: http
+    port: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  labels:
+    app: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.14.0
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests: {}
+          limits: {}
+        readinessProbe:
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+          httpGet:
+            path: /-/ready
+            port: 9090
+        livenessProbe:
+          initialDelaySeconds: 30
+          timeoutSeconds: 30
+          httpGet:
+            path: /-/healthy
+            port: 9090
+        args:
+        - --config.file=/prometheus/prometheus.yml
+        - --storage.tsdb.path=/data
+        - --storage.tsdb.retention.time=24h
+        ports:
+        - name: http
+          containerPort: 9090
+        volumeMounts:
+        - name: prometheus-config
+          mountPath: /prometheus/prometheus.yml
+          subPath: prometheus.yml
+        - name: prometheus-rules
+          mountPath: /prometheus/rules
+        - name: prometheus-data
+          mountPath: /data
+      volumes:
+      - name: prometheus-config
+        configMap:
+          name: prometheus-config
+      - name: prometheus-rules
+        configMap:
+          name: prometheus-rules
+      - name: prometheus-data
+        emptyDir: {}

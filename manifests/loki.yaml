@@ -1,0 +1,66 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loki
+  labels:
+    app: loki
+  annotations:
+    prometheus.io/scrape: 'true'
+spec:
+  selector:
+    app: loki
+  ports:
+  - name: http
+    port: 3100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loki
+  labels:
+    app: loki
+spec:
+  selector:
+    matchLabels:
+      app: loki
+  template:
+    metadata:
+      labels:
+        app: loki
+    spec:
+      containers:
+      - name: loki
+        image: grafana/loki:v1.0.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          readOnlyRootFilesystem: true
+        resources:
+          requests: {}
+          limits: {}
+        livenessProbe:
+          initialDelaySeconds: 45
+          httpGet:
+            path: /ready
+            port: 3100
+        readinessProbe:
+          initialDelaySeconds: 45
+          httpGet:
+            path: /ready
+            port: 3100
+        args:
+        - -config.file=/etc/loki/loki.yaml
+        ports:
+        - name: http
+          containerPort: 3100
+        volumeMounts:
+        - name: loki-config
+          mountPath: /etc/loki
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: loki-config
+        configMap:
+          name: loki-config
+      - name: data
+        emptyDir: {}
